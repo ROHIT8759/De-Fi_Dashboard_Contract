@@ -1,0 +1,26 @@
+# Move.toml - Package configuration
+[package]
+name = "elegent_defi"
+version = "1.0.0"
+authors = ["Rohit <rohit@elegent.com>"]
+
+[addresses]
+elegent = "_"
+std = "0x1"
+aptos_framework = "0x1"
+aptos_token = "0x3"
+
+[dev-addresses]
+elegent = "0x100"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dependencies.AptosToken]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-token"
+
+[dev-dependencies]
