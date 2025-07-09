@@ -2,13 +2,15 @@
 // Merged version with enhanced features: RBAC, Dynamic APR, Loan NFTs, Multi-token support, 
 // APY rewards, Trust Score system, Staking, and Refinancing capabilities
 
-module elegent::elegent_defi_v2 {
+module elegent::elegent_defi {
     use std::signer;
     use std::vector;
+    use std::option;
     use std::string::{Self, String};
     use std::timestamp;
     use std::error;
     use aptos_framework::coin;
+    use aptos_framework::token;
     use aptos_framework::aptos_coin::AptosCoin;
     use aptos_framework::account;
     use aptos_framework::event;
@@ -208,7 +210,7 @@ module elegent::elegent_defi_v2 {
     // ============================================================================
 
     /// Initialize the platform with all components
-    public entry fun initialize(admin: &signer) acquires PlatformState {
+    public entry fun initialize(admin: &signer) {
         let admin_addr = signer::address_of(admin);
         assert!(!exists<PlatformState>(admin_addr), error::already_exists(E_ALREADY_INITIALIZED));
 
@@ -406,6 +408,7 @@ module elegent::elegent_defi_v2 {
 
         // Calculate platform fee
         let platform_fee = (total_repayment * platform_state.platform_fee_bps) / 10000;
+        let net_repayment = total_repayment - platform_fee;
 
         // Transfer repayment (simplified for MVP)
         coin::transfer<AptosCoin>(borrower, platform_admin, total_repayment);
@@ -511,27 +514,21 @@ module elegent::elegent_defi_v2 {
         assert!(old_loan.borrower == borrower_addr, error::permission_denied(E_UNAUTHORIZED));
         assert!(old_loan.status == 0, error::invalid_state(E_LOAN_ALREADY_REPAID));
 
-        // Extract values from old loan before mutations
-        let old_token_type = old_loan.token_type;
-        let old_amount = old_loan.amount;
-        let old_collateral_amount = old_loan.collateral_amount;
-        let old_interest_rate = old_loan.dynamic_interest_rate;
-
         let trust_score = borrow_global<TrustScoreNFT>(borrower_addr);
         let new_interest_rate = calculate_dynamic_interest_rate(trust_score.score);
         
         // Only allow refinancing if new rate is better
-        assert!(new_interest_rate < old_interest_rate, error::invalid_argument(E_INVALID_AMOUNT));
+        assert!(new_interest_rate < old_loan.dynamic_interest_rate, error::invalid_argument(E_INVALID_AMOUNT));
 
         // Create new loan with better terms
         let new_loan_id = platform_state.total_loans + 1;
-        let new_interest_amount = (old_amount * new_interest_rate) / 10000;
+        let new_interest_amount = (old_loan.amount * new_interest_rate) / 10000;
 
         let new_loan = Loan {
             id: new_loan_id,
             borrower: borrower_addr,
-            token_type: old_token_type,
-            amount: old_amount,
+            token_type: old_loan.token_type,
+            amount: old_loan.amount,
             interest_amount: new_interest_amount,
             dynamic_interest_rate: new_interest_rate,
             due_date: timestamp::now_seconds() + LOAN_DURATION_SECONDS,
@@ -539,7 +536,7 @@ module elegent::elegent_defi_v2 {
             created_at: timestamp::now_seconds(),
             last_extended: 0,
             extension_count: 0,
-            collateral_amount: old_collateral_amount,
+            collateral_amount: old_loan.collateral_amount,
         };
 
         // Store new loan and mark old loan as repaid
@@ -570,20 +567,20 @@ module elegent::elegent_defi_v2 {
             old_loan_id,
             new_loan_id,
             borrower: borrower_addr,
-            old_rate: old_interest_rate,
+            old_rate: old_loan.dynamic_interest_rate,
             new_rate: new_interest_rate,
         });
     }
 
     /// Liquidate overdue loans
     public entry fun liquidate_loan(
-        platform_admin: &signer,
-        liquidator: address,
-        loan_id: u64
+        liquidator: &signer,
+        loan_id: u64,
+        platform_admin: address
     ) acquires PlatformState, TrustScoreNFT, EventHandles {
-        let admin_addr = signer::address_of(platform_admin);
+        let liquidator_addr = signer::address_of(liquidator);
         
-        let platform_state = borrow_global_mut<PlatformState>(admin_addr);
+        let platform_state = borrow_global_mut<PlatformState>(platform_admin);
         assert!(table::contains(&platform_state.active_loans, loan_id), error::not_found(E_LOAN_NOT_FOUND));
 
         let loan = table::borrow_mut(&mut platform_state.active_loans, loan_id);
@@ -604,15 +601,15 @@ module elegent::elegent_defi_v2 {
 
         // Liquidation reward for liquidator (5% of loan amount)
         let liquidation_reward = (loan.amount * 500) / 10000;
-        coin::transfer<AptosCoin>(platform_admin, liquidator, liquidation_reward);
+        coin::transfer<AptosCoin>(&platform_state.admin, liquidator_addr, liquidation_reward);
 
         // Emit event
-        let event_handles = borrow_global_mut<EventHandles>(admin_addr);
+        let event_handles = borrow_global_mut<EventHandles>(platform_admin);
         event::emit_event(&mut event_handles.loan_liquidated_events, LoanLiquidatedEvent {
             loan_id,
             borrower: loan.borrower,
             amount: loan.amount,
-            liquidator,
+            liquidator: liquidator_addr,
         });
     }
 
@@ -645,17 +642,8 @@ module elegent::elegent_defi_v2 {
             table::add(&mut staking_pool.user_stake_time, user_addr, current_time);
         };
 
-        // Accrue rewards before updating stake (inlined)
-        let time_diff = current_time - staking_pool.last_reward_time;
-        if (time_diff > 0 && table::contains(&staking_pool.user_stakes, user_addr)) {
-            let user_stake = *table::borrow(&staking_pool.user_stakes, user_addr);
-            if (user_stake > 0) {
-                let rewards = (user_stake * STAKING_REWARD_BPS * time_diff) / (10000 * 365 * 24 * 3600);
-                let user_rewards = table::borrow_mut(&mut staking_pool.user_rewards, user_addr);
-                *user_rewards = *user_rewards + rewards;
-            };
-        };
-        staking_pool.last_reward_time = current_time;
+        // Accrue rewards before updating stake
+        accrue_staking_rewards(user_addr, platform_admin);
 
         // Update stake
         let user_stake = table::borrow_mut(&mut staking_pool.user_stakes, user_addr);
@@ -677,7 +665,6 @@ module elegent::elegent_defi_v2 {
             user: user_addr,
             amount,
             total_staked: *user_stake,
-            lock_until: current_time + staking_pool.lock_duration,
         });
     }
 
@@ -694,21 +681,13 @@ module elegent::elegent_defi_v2 {
         let staking_pool = borrow_global_mut<StakingPool>(platform_admin);
         assert!(table::contains(&staking_pool.user_stakes, user_addr), error::not_found(E_NOT_INITIALIZED));
 
-        let user_stake_val = *table::borrow(&staking_pool.user_stakes, user_addr);
-        assert!(user_stake_val >= amount, error::invalid_argument(E_INSUFFICIENT_FUNDS));
+        let user_stake = table::borrow_mut(&mut staking_pool.user_stakes, user_addr);
+        assert!(*user_stake >= amount, error::invalid_argument(E_INSUFFICIENT_FUNDS));
 
-        // Accrue rewards before unstaking (inlined)
-        let current_time = timestamp::now_seconds();
-        let time_diff = current_time - staking_pool.last_reward_time;
-        if (time_diff > 0 && user_stake_val > 0) {
-            let rewards = (user_stake_val * STAKING_REWARD_BPS * time_diff) / (10000 * 365 * 24 * 3600);
-            let user_rewards = table::borrow_mut(&mut staking_pool.user_rewards, user_addr);
-            *user_rewards = *user_rewards + rewards;
-        };
-        staking_pool.last_reward_time = current_time;
+        // Accrue rewards before unstaking
+        accrue_staking_rewards(user_addr, platform_admin);
 
         // Update stake
-        let user_stake = table::borrow_mut(&mut staking_pool.user_stakes, user_addr);
         *user_stake = *user_stake - amount;
         staking_pool.total_staked = staking_pool.total_staked - amount;
 
@@ -726,7 +705,6 @@ module elegent::elegent_defi_v2 {
             user: user_addr,
             amount,
             total_staked: *user_stake,
-            lock_until: 0, // No lock for unstaking
         });
     }
 
@@ -820,15 +798,5 @@ module elegent::elegent_defi_v2 {
         };
         
         staking_pool.last_reward_time = current_time;
-    }
-
-    fun calculate_wallet_age(user_addr: address): u64 {
-        // Simple calculation: return 30 days for existing wallets (in seconds)
-        // In a real implementation, you would check the account creation time
-        if (account::exists_at(user_addr)) {
-            2592000 // 30 days in seconds
-        } else {
-            0
-        }
     }
 }

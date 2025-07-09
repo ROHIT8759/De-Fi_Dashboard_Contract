@@ -21,7 +21,7 @@ echo ""
 
 # Step 1: Compile
 echo "🔨 Step 1: Compiling..."
-aptos move compile --dev
+aptos move compile
 echo -e "${GREEN}✅ Compilation successful${NC}"
 echo ""
 

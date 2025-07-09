@@ -1,0 +1,31 @@
+{
+    "network": "testnet",
+    "contract_address": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec",
+    "deployed_at": "2025-01-05T16:04:39Z",
+    "status": "SUCCESS",
+    "test_results": {
+        "initialization": "✅ SUCCESS",
+        "trust_score_creation": "✅ SUCCESS - Score: 775, Tier: Gold",
+        "max_loan_calculation": "✅ SUCCESS - Max: 7,750,000 octas (0.0775 APT)",
+        "loan_request": "✅ SUCCESS - Loan ID: 1, Amount: 5,000,000 octas (0.05 APT)",
+        "view_functions": "✅ SUCCESS - All view functions working"
+    },
+    "functions": {
+        "initialize": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::initialize",
+        "create_trust_score": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::create_trust_score",
+        "request_loan": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::request_loan",
+        "repay_loan": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::repay_loan",
+        "stake_apt": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::stake_apt",
+        "unstake_apt": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::unstake_apt"
+    },
+    "view_functions": {
+        "get_trust_score": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::get_trust_score",
+        "get_max_loan_amount": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::get_max_loan_amount",
+        "get_user_loans": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::get_user_loans",
+        "get_loan_details": "cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec::elegent_defi::get_loan_details"
+    },
+    "explorer_links": {
+        "contract": "https://explorer.aptoslabs.com/account/cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec?network=testnet",
+        "transactions": "https://explorer.aptoslabs.com/account/cc5e97e0015543dfac2d3e686fed214a7450e5c1efe15786dfde118987c3fbec/transactions?network=testnet"
+    }
+}

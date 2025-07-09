@@ -2,12 +2,12 @@
 #[test_only]
 module elegent::elegent_tests {
     use std::signer;
-    use elegent::elegent_defi;
+    use elegent::elegent_defi_v2;
 
     #[test(admin = @elegent)]
     public fun test_initialize_platform(admin: signer) {
         // Initialize the platform
-        elegent_defi::initialize(&admin);
+        elegent_defi_v2::initialize(&admin);
         
         // Test passes if no error is thrown
         assert!(true, 1);
@@ -16,10 +16,10 @@ module elegent::elegent_tests {
     #[test(admin = @elegent, user = @0x123)]
     public fun test_create_trust_score(admin: signer, user: signer) {
         // Initialize platform first
-        elegent_defi::initialize(&admin);
+        elegent_defi_v2::initialize(&admin);
         
         // Create trust score for user
-        elegent_defi::create_trust_score(&user);
+        elegent_defi_v2::create_trust_score(&user);
         
         // Verify trust score was created
         let user_addr = signer::address_of(&user);
